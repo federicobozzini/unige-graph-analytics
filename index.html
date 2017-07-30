@@ -15,16 +15,16 @@
         margin-bottom: 2px;
     }
 
-    #controls {
+    #info {
         display: inline-block;
         vertical-align: top;
     }
 
-    #controls > div {
+    #controls>div {
         margin-bottom: 20px;
     }
 
-    #controls label{
+    #controls label {
         display: block;
     }
 
@@ -34,18 +34,23 @@
     }
 </style>
 <svg width="1350" height="750"></svg>
-<div id="controls">
-    <h2>Attack</h2>
-    <div>
-        <h4>Attack Strategy</h4>
-        <label><input type="radio" name="attackParameter" value="degree" checked>Degree</label>
-        <label><input type="radio" name="attackParameter" value="clusteringCoefficient">Clustering Coefficient</label>
-        <label><input type="radio" name="attackParameter" value="random">Random</label>
+<div id="info">
+    <div id="controls">
+        <h2>Attack</h2>
+        <div>
+            <h4>Attack Strategy</h4>
+            <label><input type="radio" name="attackParameter" value="degree" checked>Degree</label>
+            <label><input type="radio" name="attackParameter" value="clusteringCoefficient">Clustering Coefficient</label>
+            <label><input type="radio" name="attackParameter" value="random">Random</label>
+        </div>
+        <div>
+            <button id="startAttack">Start Attack</button>
+            <button id="stopAttack">Stop Attack</button>
+            <button id="reset">Reset</button>
+        </div>
     </div>
-    <div>
-        <button id="startAttack">Start Attack</button>
-        <button id="stopAttack">Stop Attack</button>        
-        <button id="reset">Reset</button>
+    <div id="stats">
+        <h2>Stats</h2>
     </div>
 </div>
 <script src="d3.v4.min.js"></script>
@@ -70,7 +75,7 @@
     var simulation = d3.forceSimulation()
         .force("link", d3.forceLink().id(function (d) { return d.id; }))
         .force("charge", d3.forceManyBody())
-        .force("center", d3.forceCenter(width / 2-80, height / 2))
+        .force("center", d3.forceCenter(width / 2 - 80, height / 2))
         .alphaTarget(1)
         .on("tick", ticked);
 
@@ -78,7 +83,7 @@
     let link = svg.append("g").classed('links', true).attr("stroke-width", 1).selectAll(".link");
     let node = svg.append("g").classed('nodes', true).attr("stroke-width", 1.5).selectAll(".node");
 
-    let graph, rawData;
+    let graph, rawData, rawDataTmp, stats;
     d3.json("adjacency_matrix.json", function (error, data) {
         if (error) throw error;
         rawData = data;
@@ -86,8 +91,10 @@
     });
 
     function reset() {
-        stopAttack();
+        rawDataTmp = rawData;
         graph = getGraph(rawData);
+        stats = getStats();
+        stopAttack();
         simulation.restart();
         d3.timeout(() => simulation.stop(), 3500);
         draw();
@@ -124,6 +131,17 @@
             .links(graph.links);
 
         simulation.alpha(1);
+
+        const statsVis = d3.select('#stats')
+            .selectAll('div')
+            .data(stats, d => d.label);
+
+        statsVis.exit().remove();
+        statsVis.enter().append('div');
+        d3.select('#stats')
+            .selectAll('div')
+            .text(d => d.label + ': ' + d.val);
+
     }
 
     function getGraph(data) {
@@ -133,7 +151,7 @@
                     id: k,
                     group: 1,
                     degree: data[k].length,
-                    clusteringCoefficient: getClusteringCoefficient(k),
+                    clusteringCoefficient: getClusteringCoefficient(k, data),
                     random: Math.random()
                 })),
             links: Object.keys(data).map(k => data[k]
@@ -149,12 +167,12 @@
         return graph;
     }
 
-    function getClusteringCoefficient(k) {
-        const neighbors = rawData[k];
+    function getClusteringCoefficient(k, data) {
+        const neighbors = data[k];
         const n = neighbors.length;
         if (n < 1)
             return 0;
-        const connectedNeighbors = neighbors.filter(n => rawData[n].some(n2 => neighbors.includes(n2))).length;
+        const connectedNeighbors = neighbors.filter(n => data[n].some(n2 => neighbors.includes(n2))).length;
         return connectedNeighbors / n / (n - 1);
     }
 
@@ -200,11 +218,16 @@
                 break;
             graph.links.splice(i, 1);
         } while (true);
+        delete rawDataTmp[d.id];
+        Object.values(rawDataTmp).filter(r => r.includes(d.id)).forEach(r => {
+            var index = r.indexOf(d.id);
+            r.splice(index, 1);
+        });
         draw();
     }
 
     let attackTimer;
-    
+
     function getOptions() {
         function groupBy(xs, key) {
             return xs.reduce(function (rv, x) {
@@ -239,10 +262,12 @@
             ls.forEach(l => l.group = 2);
             return n;
         }
-        let nodeToBeRemoved = chooseNode;
+        let nodeToBeRemoved;
         attackTimer = d3.interval(function () {
-            removeVertex(nodeToBeRemoved);
+            if (nodeToBeRemoved)
+                removeVertex(nodeToBeRemoved);
             nodeToBeRemoved = chooseNode();
+            stats = getStats();
             draw();
         }, 1000, d3.now());
     }
@@ -250,6 +275,32 @@
     function stopAttack() {
         if (attackTimer)
             attackTimer.stop();
+    }
+
+    function getStats() {
+        const nodes = graph.nodes.length;
+        const graph2 = getGraph(rawDataTmp);
+        const maxVal = d3.max(graph2.nodes.map(n => n.degree));
+        const n = graph2.nodes.find(n => n.degree == maxVal);
+        let i = 0;
+        const nodesToBeVisited = [n];
+        while (nodesToBeVisited.length) {
+            let el = null;
+            do {
+                el = nodesToBeVisited.pop();
+            } while (el.visited && nodesToBeVisited.length);
+            if (!el)
+                break;
+            el.visited = true;
+            const neighbors = rawDataTmp[el.id];
+            i++;
+            const neighborsToVisit = neighbors.map(e => graph2.nodes.find(n => n.id == e)).filter(e => !e.visited);
+            nodesToBeVisited.push(...neighborsToVisit);
+        }
+        return [
+            { label: 'Number of nodes', val: nodes },
+            { label: 'Giant component size', val: i }
+        ];
     }
 
     const buttons = document.querySelectorAll('button');
