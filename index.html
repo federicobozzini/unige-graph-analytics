@@ -64,7 +64,8 @@
             .call(d3.drag()
                 .on("start", dragstarted)
                 .on("drag", dragged)
-                .on("end", dragended));
+                .on("end", dragended))
+            .on("click", d => removeVertex(d, graph));
 
         node.append("title")
             .text(function (d) { return d.id; });
@@ -105,6 +106,22 @@
         if (!d3.event.active) simulation.alphaTarget(0);
         d.fx = null;
         d.fy = null;
+    }
+
+    function removeVertex(d, graph) {
+        var index = graph.nodes.indexOf(d);
+        if (index > -1) {
+            graph.nodes.splice(index, 1);
+        }
+        do {
+            let i = graph.links.map(l => l.source).indexOf(d);
+            if (i === -1)
+                i = graph.links.map(l => l.target).indexOf(d);
+            if (i === -1)
+                break;
+            graph.links.splice(i, 1);
+        } while (true);
+        draw();
     }
 
 </script>
