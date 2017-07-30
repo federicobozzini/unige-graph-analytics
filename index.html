@@ -24,8 +24,13 @@
         margin-bottom: 20px;
     }
 
-    #controls label {
+    #controls label{
         display: block;
+    }
+
+    #controls button {
+        display: block;
+        margin-bottom: 10px;
     }
 </style>
 <svg width="1350" height="750"></svg>
@@ -39,7 +44,8 @@
     </div>
     <div>
         <button id="startAttack">Start Attack</button>
-        <button id="stopAttack">Stop Attack</button>
+        <button id="stopAttack">Stop Attack</button>        
+        <button id="reset">Reset</button>
     </div>
 </div>
 <script src="d3.v4.min.js"></script>
@@ -76,9 +82,16 @@
     d3.json("adjacency_matrix.json", function (error, data) {
         if (error) throw error;
         rawData = data;
-        graph = getGraph(data);
-        draw();
+        reset();
     });
+
+    function reset() {
+        stopAttack();
+        graph = getGraph(rawData);
+        simulation.restart();
+        d3.timeout(() => simulation.stop(), 3500);
+        draw();
+    }
 
     function draw() {
 
@@ -191,7 +204,6 @@
     }
 
     let attackTimer;
-
     
     function getOptions() {
         function groupBy(xs, key) {
@@ -236,7 +248,8 @@
     }
 
     function stopAttack() {
-        attackTimer.stop();
+        if (attackTimer)
+            attackTimer.stop();
     }
 
     const buttons = document.querySelectorAll('button');
