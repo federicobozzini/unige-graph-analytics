@@ -1,0 +1,10 @@
+version: '2'
+services:
+  ga:
+    image: python:3.5-alpine
+    ports:
+      - "8933:8080"
+    volumes:
+      - .:/var/www
+    working_dir: /var/www
+    entrypoint: python create_adjacency_matrix.py
