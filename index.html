@@ -28,13 +28,14 @@
         display: block;
     }
 </style>
-<svg width="1200" height="750"></svg>
+<svg width="1350" height="750"></svg>
 <div id="controls">
     <h2>Attack</h2>
     <div>
         <h4>Attack Strategy</h4>
         <label><input type="radio" name="attackParameter" value="degree" checked>Degree</label>
         <label><input type="radio" name="attackParameter" value="clusteringCoefficient">Clustering Coefficient</label>
+        <label><input type="radio" name="attackParameter" value="random">Random</label>
     </div>
     <div>
         <button id="startAttack">Start Attack</button>
@@ -63,11 +64,11 @@
     var simulation = d3.forceSimulation()
         .force("link", d3.forceLink().id(function (d) { return d.id; }))
         .force("charge", d3.forceManyBody())
-        .force("center", d3.forceCenter(width / 2, height / 2))
+        .force("center", d3.forceCenter(width / 2-80, height / 2))
         .alphaTarget(1)
         .on("tick", ticked);
 
-    d3.timeout(() => simulation.stop(), 4000);
+    d3.timeout(() => simulation.stop(), 3500);
     let link = svg.append("g").classed('links', true).attr("stroke-width", 1).selectAll(".link");
     let node = svg.append("g").classed('nodes', true).attr("stroke-width", 1.5).selectAll(".node");
 
@@ -120,6 +121,7 @@
                     group: 1,
                     degree: data[k].length,
                     clusteringCoefficient: getClusteringCoefficient(k),
+                    random: Math.random()
                 })),
             links: Object.keys(data).map(k => data[k]
                 .map(e => ({
