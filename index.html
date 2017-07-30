@@ -10,15 +10,36 @@
         stroke-width: 1.5px;
     }
 
+    h4 {
+        margin: 0;
+        margin-bottom: 2px;
+    }
+
     #controls {
         display: inline-block;
         vertical-align: top;
     }
+
+    #controls > div {
+        margin-bottom: 20px;
+    }
+
+    #controls label {
+        display: block;
+    }
 </style>
 <svg width="1200" height="750"></svg>
 <div id="controls">
-    <button id="startAttack">Start Attack</button>
-    <button id="stopAttack">Stop Attack</button>
+    <h2>Attack</h2>
+    <div>
+        <h4>Attack Strategy</h4>
+        <label><input type="radio" name="attackParameter" value="degree" checked>Degree</label>
+        <label><input type="radio" name="attackParameter" value="clusteringCoefficient">Clustering Coefficient</label>
+    </div>
+    <div>
+        <button id="startAttack">Start Attack</button>
+        <button id="stopAttack">Stop Attack</button>
+    </div>
 </div>
 <script src="d3.v4.min.js"></script>
 <script>
@@ -28,14 +49,14 @@
 
     var color = v => {
         switch (v) {
-         case 1: return 'blue';
-         case 2: return 'red';
+            case 1: return 'blue';
+            case 2: return 'red';
         }
     }
     var linkColor = v => {
         switch (v) {
-         case 1: return '#999';
-         case 2: return 'red';
+            case 1: return '#aaa';
+            case 2: return 'red';
         }
     }
 
@@ -46,16 +67,15 @@
         .alphaTarget(1)
         .on("tick", ticked);
 
-    d3.timeout(() => simulation.stop(), 5000);
+    d3.timeout(() => simulation.stop(), 4000);
     let link = svg.append("g").classed('links', true).attr("stroke-width", 1).selectAll(".link");
     let node = svg.append("g").classed('nodes', true).attr("stroke-width", 1.5).selectAll(".node");
 
-    let graph;
+    let graph, rawData;
     d3.json("adjacency_matrix.json", function (error, data) {
         if (error) throw error;
-
+        rawData = data;
         graph = getGraph(data);
-
         draw();
     });
 
@@ -78,7 +98,7 @@
                 .on("start", dragstarted)
                 .on("drag", dragged)
                 .on("end", dragended))
-            .on("click", d => removeVertex(d, graph));
+            .on("click", d => removeVertex(d));
 
         node.append("title")
             .text(function (d) { return d.id; });
@@ -98,19 +118,29 @@
                 .map(k => ({
                     id: k,
                     group: 1,
-                    degree: data[k].length
+                    degree: data[k].length,
+                    clusteringCoefficient: getClusteringCoefficient(k),
                 })),
             links: Object.keys(data).map(k => data[k]
-                .map(e => ({ 
-                    source: k, 
-                    target: e, 
+                .map(e => ({
+                    source: k,
+                    target: e,
                     group: 1
-                    })))
+                })))
                 .reduce(function (a, b) {
                     return a.concat(b);
                 }, [])
         };
         return graph;
+    }
+
+    function getClusteringCoefficient(k) {
+        const neighbors = rawData[k];
+        const n = neighbors.length;
+        if (n < 1)
+            return 0;
+        const connectedNeighbors = neighbors.filter(n => rawData[n].some(n2 => neighbors.includes(n2))).length;
+        return connectedNeighbors / n / (n - 1);
     }
 
     function ticked() {
@@ -142,7 +172,7 @@
         d.fy = null;
     }
 
-    function removeVertex(d, graph) {
+    function removeVertex(d) {
         var index = graph.nodes.indexOf(d);
         if (index > -1) {
             graph.nodes.splice(index, 1);
@@ -160,10 +190,36 @@
 
     let attackTimer;
 
+    
+    function getOptions() {
+        function groupBy(xs, key) {
+            return xs.reduce(function (rv, x) {
+                (rv[x[key]] = rv[x[key]] || []).push(x);
+                return rv;
+            }, {});
+        };
+
+        const radioButtons = [...document.querySelectorAll('input[type=radio]')];
+        const radioGroups = groupBy(radioButtons, 'name');
+        const checkboxes = [...document.querySelectorAll('input[type=checkbox]')];
+        const options = {};
+        Object.keys(radioGroups).forEach(g => {
+            const selectedButton = radioGroups[g].find(b => b.checked);
+            options[selectedButton.name] = selectedButton.value;
+            const dataset = selectedButton.dataset;
+        });
+        checkboxes.forEach(c => {
+            options[c.name] = c.checked;
+        });
+        return options;
+    }
+
     function startAttack() {
+        const options = getOptions();
+        const attackParameter = options.attackParameter;
         function chooseNode() {
-            const maxDegree = d3.max(graph.nodes.map(n => n.degree));
-            const n = graph.nodes.find(n => n.degree == maxDegree);
+            const maxVal = d3.max(graph.nodes.map(n => n[attackParameter]));
+            const n = graph.nodes.find(n => n[attackParameter] == maxVal);
             const ls = graph.links.filter(l => l.source == n || l.target == n);
             n.group = 2;
             ls.forEach(l => l.group = 2);
@@ -171,10 +227,10 @@
         }
         let nodeToBeRemoved = chooseNode;
         attackTimer = d3.interval(function () {
-            removeVertex(nodeToBeRemoved, graph);
+            removeVertex(nodeToBeRemoved);
             nodeToBeRemoved = chooseNode();
             draw();
-            }, 1000, d3.now());
+        }, 1000, d3.now());
     }
 
     function stopAttack() {
