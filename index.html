@@ -31,70 +31,91 @@
     .controls button {
         display: block;
         margin-bottom: 10px;
+        width: 150px;
+    }
+
+    #stats {
+        min-height: 120px;
+    }
+
+    input[type=text] {
+        width: 20px;
+    }
+
+    #info label span {
+        display: inline-block;
+        width: 120px;
     }
 </style>
-<svg width="1300" height="750"></svg>
+<svg width="1260" height="750"></svg>
 <div id="info">
-    <div id="attack">
-        <h2>Attack</h2>
-        <div class="controls">
-            <div>
-                <h4>Attack Strategy</h4>
-                <label><input type="radio" name="attackParameter" value="degree" checked>Degree</label>
-                <label><input type="radio" name="attackParameter" value="clusteringCoefficient">Clustering Coefficient</label>
-                <label><input type="radio" name="attackParameter" value="random">Random</label>
-            </div>
-            <div>
-                <button id="startAttack">Start Attack</button>
-                <button id="stopAttack">Stop Attack</button>
-                <button id="reset">Reset</button>
-            </div>
+    <h2>Control Panel</h2>
+    <div class="controls">
+        <div>
+            <h4>Node selection strategy</h4>
+            <label><input type="radio" name="attackParameter" value="degree" checked>Degree</label>
+            <label><input type="radio" name="attackParameter" value="clusteringCoefficient">Clustering Coefficient</label>
+            <label><input type="radio" name="attackParameter" value="random">Random</label>
+            <h4>Contagion initialization</h4>
+            <label><span>Infected nodes:</span><input type="text" name="k" value="66" checked></label>
+            <label><span>Option 1 payoff:</span><input type="text" name="payoff1" value="1" checked></label>
+            <label><span>Option 2 payoff:</span><input type="text" name="payoff2" value="2.9" checked></label>
+            <h4>Other options</h4>
+            <label>
+                <span>Simulaton speed:</span>
+                <select name="speed">
+                    <option value="2000">Slow</option>
+                    <option value="1000" selected>Medium</option>
+                    <option value="500">Fast</option>
+                </select>
+            </label>
         </div>
-        <div id="stats">
-            <h3>Stats</h3>
-        </div>
-    </div>
-    <div>
-        <h2>Contagion</h2>
-        <div class="controls">
+        <div>
+            <button id="startAttack">Start Attack</button>
             <button id="startContagion">Start Contagion</button>
-            <button id="stopContagion">Stop Contagion</button>
+            <button id="stop">Stop</button>
             <button id="reset">Reset</button>
         </div>
+    </div>
+    <div id="stats">
+        <h3>Stats</h3>
     </div>
 </div>
 <script src="d3.v4.min.js"></script>
 <script>
+    const NORMAL = 1, TO_BE_REMOVED = 2, INFECTED = 3;
     var svg = d3.select("svg"),
         width = +svg.attr("width"),
         height = +svg.attr("height");
 
     var color = v => {
         switch (v) {
-            case 1: return 'blue';
-            case 2: return 'red';
+            case NORMAL: return 'blue';
+            case TO_BE_REMOVED: return 'red';
+            case INFECTED: return 'orange';
         }
     }
     var linkColor = v => {
         switch (v) {
-            case 1: return '#aaa';
-            case 2: return 'red';
+            case NORMAL: return '#aaa';
+            case TO_BE_REMOVED: return 'red';
         }
     }
 
     var simulation = d3.forceSimulation()
         .force("link", d3.forceLink().id(function (d) { return d.id; }))
         .force("charge", d3.forceManyBody())
-        .force("center", d3.forceCenter(width / 2 - 100, height / 2))
-        .velocityDecay(0.5)
+        .force("center", d3.forceCenter(width / 2 - 140, height / 2))
+        .velocityDecay(0.55)
         .alphaTarget(1)
         .on("tick", ticked);
 
-    d3.timeout(() => simulation.stop(), 3500);
+    d3.timeout(() => simulation.stop(), 4000);
     let link = svg.append("g").classed('links', true).attr("stroke-width", 1).selectAll(".link");
     let node = svg.append("g").classed('nodes', true).attr("stroke-width", 1.5).selectAll(".node");
+    loadEvents();
 
-    let graph, rawData, rawDataTmp, stats;
+    let graph, rawData, rawDataTmp, stats, attackTimer, contagionTimer;
     d3.json("adjacency_matrix.json", function (error, data) {
         if (error) throw error;
         rawData = data;
@@ -104,21 +125,20 @@
     function reset() {
         rawDataTmp = JSON.parse(JSON.stringify(rawData));
         graph = getGraph(rawData);
-        stats = getStats();
-        stopAttack();
+        stop();
         simulation.restart();
         d3.timeout(() => simulation.stop(), 3500);
         draw();
     }
 
     function draw() {
-
+        stats = getStats();
         node = svg.select('.nodes')
             .selectAll("circle")
             .data(graph.nodes, function (d) { return d.id; });
         node.exit().remove();
         node = node.enter().append("circle").merge(node);
-        node.attr("r", 5)
+        node.attr("r", 4.3)
             .attr("fill", function (d) { return color(d.group); })
             .on('mouseover', d => {
                 setNodeToDelete(d);
@@ -152,7 +172,7 @@
 
         const statsVis = d3.select('#stats')
             .selectAll('div')
-            .data(stats, d => d.label);
+            .data(stats);
 
         statsVis.exit().remove();
         statsVis.enter().append('div');
@@ -167,7 +187,7 @@
             nodes: Object.keys(data)
                 .map(k => ({
                     id: k,
-                    group: 1,
+                    group: NORMAL,
                     degree: data[k].length,
                     clusteringCoefficient: getClusteringCoefficient(k, data),
                     random: Math.random()
@@ -176,7 +196,7 @@
                 .map(e => ({
                     source: k,
                     target: e,
-                    group: 1
+                    group: NORMAL
                 })))
                 .reduce(function (a, b) {
                     return a.concat(b);
@@ -188,7 +208,7 @@
     function getClusteringCoefficient(k, data) {
         const neighbors = data[k];
         const n = neighbors.length;
-        if (n < 1)
+        if (n <= 1)
             return 0;
         const connectedNeighbors = neighbors.filter(n => data[n].some(n2 => neighbors.includes(n2))).length;
         return connectedNeighbors / n / (n - 1);
@@ -207,6 +227,9 @@
     }
 
     function removeVertex(d) {
+        console.log(d);
+        console.log(graph.links.filter(l => l.source == d || l.target == d));
+        console.log(rawDataTmp[d])
         delete rawDataTmp[d.id];
         Object.values(rawDataTmp).filter(r => r.includes(d.id)).forEach(r => {
             var index = r.indexOf(d.id);
@@ -224,9 +247,13 @@
                 break;
             graph.links.splice(i, 1);
         } while (true);
+        graph.nodes.forEach(n => {
+            if (!rawDataTmp[n.id])
+                console.log(n.id)
+            n.degree = rawDataTmp[n.id].length;
+            n.clusteringCoefficient = getClusteringCoefficient(n.id, rawDataTmp);
+        });
     }
-
-    let attackTimer;
 
     function getOptions() {
         function groupBy(xs, key) {
@@ -236,58 +263,80 @@
             }, {});
         };
 
+        const textInputs = [...document.querySelectorAll('input[type=text]')];
         const radioButtons = [...document.querySelectorAll('input[type=radio]')];
         const radioGroups = groupBy(radioButtons, 'name');
         const checkboxes = [...document.querySelectorAll('input[type=checkbox]')];
+        const selectOptions = [...document.querySelectorAll('option')];
+        selectOptions.forEach(o => parentName = o.parentNode.name);
+        const selectOptionGroups = groupBy(selectOptions, 'parentName');
         const options = {};
         Object.keys(radioGroups).forEach(g => {
             const selectedButton = radioGroups[g].find(b => b.checked);
             options[selectedButton.name] = selectedButton.value;
-            const dataset = selectedButton.dataset;
         });
         checkboxes.forEach(c => {
             options[c.name] = c.checked;
         });
+        textInputs.forEach(t => {
+            options[t.name] = t.value;
+        });
+        selectOptions.filter(o => o.selected).forEach(o => {
+            options[o.parentNode.name] = o.value;
+        })
         return options;
     }
 
     function setNodeToDelete(n) {
         const ls = graph.links.filter(l => l.source == n || l.target == n);
-        n.group = 2;
-        ls.forEach(l => l.group = 2);
+        n.group = TO_BE_REMOVED;
+        ls.forEach(l => l.group = TO_BE_REMOVED);
     }
 
     function setNodeNotToDelete(n) {
         const ls = graph.links.filter(l => l.source == n || l.target == n);
-        n.group = 1;
-        ls.forEach(l => l.group = 1);
+        n.group = NORMAL;
+        ls.forEach(l => l.group = NORMAL);
+    }
+
+
+    function chooseNodes(choiceParameter, k) {
+        const maxVal = d3.max(graph.nodes.map(n => n[choiceParameter]));
+        const n = graph.nodes.find(n => n[choiceParameter] == maxVal);
+        graph.nodes.sort((n1, n2) => n2[choiceParameter] - n1[choiceParameter]);
+        return graph.nodes.slice(0, k);
+    }
+
+    function cleanAttack() {
+        graph.nodes.filter(n => n.group == TO_BE_REMOVED).forEach(n => n.group = NORMAL);
+        graph.links.filter(l => l.group == TO_BE_REMOVED).forEach(l => l.group = NORMAL);
     }
 
     function startAttack() {
+        stop();
+        cleanAttack();
         const options = getOptions();
-        const attackParameter = options.attackParameter;
-        function chooseNode() {
-            const maxVal = d3.max(graph.nodes.map(n => n[attackParameter]));
-            const n = graph.nodes.find(n => n[attackParameter] == maxVal);
-            setNodeToDelete(n);
-            return n;
-        }
         let nodeToBeRemoved;
+        console.log(options);
         attackTimer = d3.interval(function () {
             if (nodeToBeRemoved)
                 removeVertex(nodeToBeRemoved);
-            nodeToBeRemoved = chooseNode();
-            stats = getStats();
+            nodeToBeRemoved = chooseNodes(options.attackParameter, 1)[0];
+            setNodeToDelete(nodeToBeRemoved);
             draw();
-        }, 1000, d3.now());
-    }
-
-    function stopAttack() {
-        if (attackTimer)
-            attackTimer.stop();
+        }, +options.speed, d3.now());
     }
 
     function getStats() {
+        function sum(xs) {
+            return xs.reduce(function(a, b) { return a + b; });
+        } 
+        function avg(xs) { 
+            return sum(xs) / xs.length;
+        };
+        function format(v) {
+            return d3.format(".2n")(v);
+        }
         const nodes = graph.nodes.length;
         const graph2 = getGraph(rawDataTmp);
         const maxVal = d3.max(graph2.nodes.map(n => n.degree));
@@ -307,23 +356,66 @@
             const neighborsToVisit = neighbors.map(e => graph2.nodes.find(n => n.id == e)).filter(e => !e.visited);
             nodesToBeVisited.push(...neighborsToVisit);
         }
+        const averageDegree = avg(graph.nodes.map(n => n.degree));
+        const averageClusteringCoefficient = avg(graph.nodes.map(n => n.clusteringCoefficient));
+        const nonInfectedNodes = graph.nodes.filter(n => n.group !== INFECTED);
+        const infectedNodes = graph.nodes.filter(n => n.group === INFECTED);
         return [
             { label: 'Number of nodes', val: nodes },
-            { label: 'Giant component size', val: i }
+            { label: 'Giant component size', val: i },
+            {label: 'Avg degree', val: format(averageDegree)},
+            {label: 'Avg clustering coefficient', val: format(averageClusteringCoefficient)},
+            { label: 'Non infected nodes', val: nonInfectedNodes.length },
+            { label: 'Infected nodes', val: infectedNodes.length }
         ];
     }
+
+    function cleanContagion() {
+        graph.nodes.filter(n => n.group == INFECTED).forEach(n => n.group = NORMAL);
+    }
+
     function startContagion() {
+        stop();
+        cleanContagion();
+        cleanAttack();
+        const options = getOptions();
+        const payoffs = { [NORMAL]: options.payoff1, [INFECTED]: options.payoff2 };
+        let infectedNodes = chooseNodes(options.attackParameter, options.k);
+        infectedNodes.forEach(n => n.group = INFECTED);
+        contagionTimer = d3.interval(function () {
+            draw();
+            updateContagion(payoffs);
+        }, +options.speed, d3.now());
     }
 
-    function stopContagion() {
-
+    function stop() {
+        if (attackTimer)
+            attackTimer.stop();
+        if (contagionTimer)
+            contagionTimer.stop();
     }
 
-    const buttons = document.querySelectorAll('button');
-    buttons.forEach(b => b.addEventListener('click', () => {
-        const id = b.id;
-        window[id]();
-    }));
+    function updateContagion(payoffs) {
+        graph.nodes.forEach(n => {
+            const neighbors = graph.links.filter(l => l.source == n).map(l => l.target);
+            const nonInfectedNeighbors = neighbors.filter(l => l.group == NORMAL);
+            const infectedNeighbors = neighbors.filter(l => l.group == INFECTED);
+            const nonInfectionScore = nonInfectedNeighbors.length * payoffs[NORMAL];
+            const infectionScore = infectedNeighbors.length * payoffs[INFECTED];
+            n.infected = nonInfectionScore < infectionScore;
+        });
+        graph.nodes.forEach(n => {
+            n.group = n.infected ? INFECTED : NORMAL;
+            n.infect = false;
+        });
+    }
 
+    function loadEvents() {
+        const buttons = document.querySelectorAll('button');
+        buttons.forEach(b => b.addEventListener('click', () => {
+            const id = b.id;
+            window[id]();
+        }));
+    }
 
 </script>
