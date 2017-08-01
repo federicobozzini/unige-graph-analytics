@@ -20,37 +20,47 @@
         vertical-align: top;
     }
 
-    #controls>div {
+    .controls>div {
         margin-bottom: 20px;
     }
 
-    #controls label {
+    .controls label {
         display: block;
     }
 
-    #controls button {
+    .controls button {
         display: block;
         margin-bottom: 10px;
     }
 </style>
 <svg width="1300" height="750"></svg>
 <div id="info">
-    <div id="controls">
+    <div id="attack">
         <h2>Attack</h2>
-        <div>
-            <h4>Attack Strategy</h4>
-            <label><input type="radio" name="attackParameter" value="degree" checked>Degree</label>
-            <label><input type="radio" name="attackParameter" value="clusteringCoefficient">Clustering Coefficient</label>
-            <label><input type="radio" name="attackParameter" value="random">Random</label>
+        <div class="controls">
+            <div>
+                <h4>Attack Strategy</h4>
+                <label><input type="radio" name="attackParameter" value="degree" checked>Degree</label>
+                <label><input type="radio" name="attackParameter" value="clusteringCoefficient">Clustering Coefficient</label>
+                <label><input type="radio" name="attackParameter" value="random">Random</label>
+            </div>
+            <div>
+                <button id="startAttack">Start Attack</button>
+                <button id="stopAttack">Stop Attack</button>
+                <button id="reset">Reset</button>
+            </div>
         </div>
-        <div>
-            <button id="startAttack">Start Attack</button>
-            <button id="stopAttack">Stop Attack</button>
-            <button id="reset">Reset</button>
+        <div id="stats">
+            <h3>Stats</h3>
         </div>
     </div>
-    <div id="stats">
-        <h2>Stats</h2>
+    <div>
+        <h2>Contagion</h2>
+        <div class="controls">
+            <button id="startContagion">Start Contagion</button>
+            <button id="stopContagion">Stop Contagion</button>
+            <button id="reset">Reset</button>
+        </div>
     </div>
 </div>
 <script src="d3.v4.min.js"></script>
@@ -302,11 +312,18 @@
             { label: 'Giant component size', val: i }
         ];
     }
+    function startContagion() {
+    }
+
+    function stopContagion() {
+
+    }
 
     const buttons = document.querySelectorAll('button');
     buttons.forEach(b => b.addEventListener('click', () => {
         const id = b.id;
         window[id]();
     }));
+
 
 </script>
