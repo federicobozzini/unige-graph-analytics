@@ -113,7 +113,7 @@
         }
     }
 
-    let graph, rawData, rawDataTmp, stats, attackTimer, contagionTimer, iteration, status;
+    let graph, rawData, rawDataTmp, stats, timer, iteration, status;
 
     var simulation = d3.forceSimulation()
         .force("link", d3.forceLink().id(function (d) { return d.id; }))
@@ -356,7 +356,7 @@
         status = ATTACK;
         const options = getOptions();
         let nodeToBeRemoved;
-        attackTimer = d3.interval(function () {
+        timer = d3.interval(function () {
             iteration++;
             if (nodeToBeRemoved)
                 removeVertex(nodeToBeRemoved);
@@ -423,7 +423,7 @@
         const payoffs = { [NORMAL]: options.payoff1, [INFECTED]: options.payoff2 };
         let infectedNodes = chooseNodes(options.attackParameter, options.k);
         infectedNodes.forEach(n => n.group = INFECTED);
-        contagionTimer = d3.interval(function () {
+        timer = d3.interval(function () {
             iteration++;
             draw();
             updateContagion(payoffs);
@@ -431,10 +431,8 @@
     }
 
     function stop() {
-        if (attackTimer)
-            attackTimer.stop();
-        if (contagionTimer)
-            contagionTimer.stop();
+        if (timer)
+            timer.stop();
         status = WAITING;
         draw();
     }
