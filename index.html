@@ -110,12 +110,13 @@
         .alphaTarget(1)
         .on("tick", ticked);
 
+    let graph, rawData, rawDataTmp, stats, attackTimer, contagionTimer, iteration;
+
     d3.timeout(() => simulation.stop(), 4000);
     let link = svg.append("g").classed('links', true).attr("stroke-width", 1).selectAll(".link");
     let node = svg.append("g").classed('nodes', true).attr("stroke-width", 1.5).selectAll(".node");
+    
     loadEvents();
-
-    let graph, rawData, rawDataTmp, stats, attackTimer, contagionTimer;
     d3.json("adjacency_matrix.json", function (error, data) {
         if (error) throw error;
         rawData = data;
@@ -125,6 +126,7 @@
     function reset() {
         rawDataTmp = JSON.parse(JSON.stringify(rawData));
         graph = getGraph(rawData);
+        iteration = 0;
         stop();
         simulation.restart();
         d3.timeout(() => simulation.stop(), 3500);
@@ -133,6 +135,7 @@
 
     function draw() {
         stats = getStats();
+
         node = svg.select('.nodes')
             .selectAll("circle")
             .data(graph.nodes, function (d) { return d.id; });
@@ -319,6 +322,7 @@
         let nodeToBeRemoved;
         console.log(options);
         attackTimer = d3.interval(function () {
+            iteration++;
             if (nodeToBeRemoved)
                 removeVertex(nodeToBeRemoved);
             nodeToBeRemoved = chooseNodes(options.attackParameter, 1)[0];
@@ -361,6 +365,7 @@
         const nonInfectedNodes = graph.nodes.filter(n => n.group !== INFECTED);
         const infectedNodes = graph.nodes.filter(n => n.group === INFECTED);
         return [
+            { label: 'Iteration', val: iteration},
             { label: 'Number of nodes', val: nodes },
             { label: 'Giant component size', val: i },
             {label: 'Avg degree', val: format(averageDegree)},
@@ -383,6 +388,7 @@
         let infectedNodes = chooseNodes(options.attackParameter, options.k);
         infectedNodes.forEach(n => n.group = INFECTED);
         contagionTimer = d3.interval(function () {
+            iteration++;
             draw();
             updateContagion(payoffs);
         }, +options.speed, d3.now());
