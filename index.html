@@ -11,18 +11,22 @@
         cursor: pointer;
     }
 
-    h4 {
-        margin: 0;
-        margin-bottom: 2px;
+    h2 {
+        margin: 3px 0;
+    }
+
+    h3, h4, h5 {
+        margin: 2px 0; 
     }
 
     #info {
         display: inline-block;
         vertical-align: top;
+        max-width: 280px;
     }
 
     .controls>div {
-        margin-bottom: 20px;
+        margin-bottom: 10px;
     }
 
     .controls label {
@@ -31,13 +35,14 @@
     }
 
     .controls button {
-        display: block;
+        display: inline-block;
         margin-bottom: 10px;
-        width: 150px;
+        margin-right: 8px;
+        width: 120px;
     }
 
     #stats {
-        min-height: 120px;
+        min-height: 180px;
     }
 
     input[type=text] {
@@ -91,6 +96,10 @@
     <div id="stats">
         <h3>Stats</h3>
     </div>
+    <div id="charts">
+        <h5>Degree probabily distribution</h5>
+        <svg id="degreechart" width="220" height="140"></svg>
+    </div>
 </div>
 <script src="d3.v4.min.js"></script>
 <script>
@@ -115,7 +124,7 @@
     };
     const nodeSize = 9;
 
-    let graph, rawData, rawDataTmp, stats, timer, iteration, status;
+    let graph, rawData, rawDataTmp, stats, timer, iteration, status, totalMaxDegree;
 
     var simulation = d3.forceSimulation()
         .force("link", d3.forceLink().id(function (d) { return d.id; }))
@@ -138,6 +147,8 @@
         rawDataTmp = JSON.parse(JSON.stringify(rawData));
         graph = getGraph(rawData);
         iteration = 0;
+        const degrees = graph.nodes.map(n => n.degree);
+        totalMaxDegree = d3.max(degrees);
         stop();
         status = LOADING;
         simulation.restart();
@@ -233,6 +244,81 @@
         d3.select('#stats')
             .selectAll('div')
             .text(d => d.label + ': ' + d.val);
+
+
+
+        var degreeChart = d3.select("#degreechart"),
+            degreeChartWidth = +degreeChart.attr("width"),
+            degreeChartHeight = +degreeChart.attr("height"),
+            margin = { top: 20, right: 30, bottom: 30, left: 40 };
+
+        const degrees = graph.nodes.map(n => n.degree);
+
+        var x = d3.scaleLinear()
+            .domain([0, totalMaxDegree])
+            .range([margin.left, degreeChartWidth - margin.right]);
+
+        var y = d3.scaleLinear()
+            .domain([0, 0.1])
+            .range([degreeChartHeight - margin.bottom, margin.top]);
+
+        let xAxis, yAxis;
+        let xAxisUpdate = d3.axisBottom(x).ticks(8);
+        let yAxisUpdate = d3.axisLeft(y);
+
+        if (d3.selectAll('.axis').empty()) {
+            xAxis = degreeChart.append("g")
+                .attr("class", "axis axis--x")
+                .attr("transform", "translate(0," + (degreeChartHeight - margin.bottom) + ")")
+                .call(xAxisUpdate);
+
+            yAxis = degreeChart.append("g")
+                .attr("class", "axis axis--y")
+                .attr("transform", "translate(" + margin.left + ",0)")
+                .call(yAxisUpdate.ticks(null, "%"));
+        } else {
+            xAxis = degreeChart.selectAll('.axis--x');
+            yAxis = degreeChart.selectAll('.axis--y');
+        }
+        xAxis.call(xAxisUpdate)
+        yAxis.call(yAxisUpdate);
+
+        var n = degrees.length,
+            bins = d3.histogram().domain(x.domain())(degrees),
+            density = kernelDensityEstimator(kernelEpanechnikov(7), x.ticks(20))(degrees);
+
+        const valueline = d3.line()
+            .curve(d3.curveBasis)
+            .x(function (d) { return x(d[0]); })
+            .y(function (d) { return y(d[1]); });
+
+        const degreeLines = degreeChart
+            .selectAll("path.lines")
+            .data([density]);
+
+        degreeLines.enter().append('path')
+            .attr('class', 'lines');
+
+        degreeLines
+            .attr("fill", "none")
+            .attr("stroke", "#000")
+            .attr("stroke-width", 1.5)
+            .attr("stroke-linejoin", "round")
+            .attr("d", valueline);
+
+        function kernelDensityEstimator(kernel, X) {
+            return function (V) {
+                return X.map(function (x) {
+                    return [x, d3.mean(V, function (v) { return kernel(x - v); })];
+                });
+            };
+        }
+
+        function kernelEpanechnikov(k) {
+            return function (v) {
+                return Math.abs(v /= k) <= 1 ? 0.75 * (1 - v * v) / k : 0;
+            };
+        }
 
     }
 
