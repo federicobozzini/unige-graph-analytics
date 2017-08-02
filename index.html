@@ -20,7 +20,7 @@
         vertical-align: top;
     }
 
-    .controls > div {
+    .controls>div {
         margin-bottom: 20px;
     }
 
@@ -46,6 +46,10 @@
     #info label span {
         display: inline-block;
         width: 120px;
+    }
+
+    .status {
+        font-weight: bold;
     }
 </style>
 <svg width="1260" height="750"></svg>
@@ -82,6 +86,7 @@
             <button id="reset">Reset</button>
         </div>
     </div>
+    <h4 class="status">Status: Loading</h4>
     <div id="stats">
         <h3>Stats</h3>
     </div>
@@ -89,6 +94,7 @@
 <script src="d3.v4.min.js"></script>
 <script>
     const NORMAL = 1, TO_BE_REMOVED = 2, INFECTED = 3;
+    const LOADING = 'Loading', WAITING = 'Wating', ATTACK = 'Attack', CONTAGION = 'Contagion';
     var svg = d3.select("svg"),
         width = +svg.attr("width"),
         height = +svg.attr("height");
@@ -107,20 +113,20 @@
         }
     }
 
+    let graph, rawData, rawDataTmp, stats, attackTimer, contagionTimer, iteration, status;
+
     var simulation = d3.forceSimulation()
         .force("link", d3.forceLink().id(function (d) { return d.id; }))
         .force("charge", d3.forceManyBody())
         .force("center", d3.forceCenter(width / 2 - 140, height / 2))
         .velocityDecay(0.55)
-        .alphaTarget(1)
+        // .alphaMin(0.05)
         .on("tick", ticked);
 
-    let graph, rawData, rawDataTmp, stats, attackTimer, contagionTimer, iteration;
-
-    d3.timeout(() => simulation.stop(), 4000);
+    //d3.timeout(() => simulation.stop(), 4000);
     let link = svg.append("g").classed('links', true).attr("stroke-width", 1).selectAll(".link");
     let node = svg.append("g").classed('nodes', true).attr("stroke-width", 1.5).selectAll(".node");
-
+    
     loadEvents();
     d3.json("adjacency_matrix.json", function (error, data) {
         if (error) throw error;
@@ -133,13 +139,42 @@
         graph = getGraph(rawData);
         iteration = 0;
         stop();
+        status = LOADING;
         simulation.restart();
-        d3.timeout(() => simulation.stop(), 3500);
         draw();
+        d3.timeout(() => {
+            simulation.stop();
+            status = WAITING;
+            draw();
+        }, 3500);
+    }
+
+    function getAllControls() {
+        return [...document.querySelectorAll('input, select, button')];
+    }
+
+    function getControlsToDisable(status) {   
+        let componentsToDisableSelector;
+        const statusDisablingSelectorMatrix = {
+            [LOADING]: 'input, select, button',
+            [WAITING]: '#stop',
+            [ATTACK]: 'input, select, button:not(#stop)',            
+            [CONTAGION]: 'input, select, button:not(#stop)'
+        }
+        const selector = statusDisablingSelectorMatrix[status];
+        if (!selector)
+            return [];
+        return [...document.querySelectorAll(selector)];
     }
 
     function draw() {
         stats = getStats();
+        const controls = getAllControls();
+        controls.forEach(c => c.disabled = false);
+        const controlsToDisable = getControlsToDisable(status);
+        controlsToDisable.forEach(c => c.disabled = true);
+
+        d3.select('.status').text(d => 'Status: ' + status);
 
         node = svg.select('.nodes')
             .selectAll("circle")
@@ -235,9 +270,6 @@
     }
 
     function removeVertex(d) {
-        console.log(d);
-        console.log(graph.links.filter(l => l.source == d || l.target == d));
-        console.log(rawDataTmp[d])
         delete rawDataTmp[d.id];
         Object.values(rawDataTmp).filter(r => r.includes(d.id)).forEach(r => {
             var index = r.indexOf(d.id);
@@ -256,8 +288,6 @@
             graph.links.splice(i, 1);
         } while (true);
         graph.nodes.forEach(n => {
-            if (!rawDataTmp[n.id])
-                console.log(n.id)
             n.degree = rawDataTmp[n.id].length;
             n.clusteringCoefficient = getClusteringCoefficient(n.id, rawDataTmp);
         });
@@ -323,9 +353,9 @@
     function startAttack() {
         stop();
         cleanAttack();
+        status = ATTACK;
         const options = getOptions();
         let nodeToBeRemoved;
-        console.log(options);
         attackTimer = d3.interval(function () {
             iteration++;
             if (nodeToBeRemoved)
@@ -388,6 +418,7 @@
         stop();
         cleanContagion();
         cleanAttack();
+        status = CONTAGION;
         const options = getOptions();
         const payoffs = { [NORMAL]: options.payoff1, [INFECTED]: options.payoff2 };
         let infectedNodes = chooseNodes(options.attackParameter, options.k);
@@ -404,6 +435,8 @@
             attackTimer.stop();
         if (contagionTimer)
             contagionTimer.stop();
+        status = WAITING;
+        draw();
     }
 
     function updateContagion(payoffs) {
