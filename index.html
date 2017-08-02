@@ -15,8 +15,10 @@
         margin: 3px 0;
     }
 
-    h3, h4, h5 {
-        margin: 2px 0; 
+    h3,
+    h4,
+    h5 {
+        margin: 2px 0;
     }
 
     #info {
@@ -100,7 +102,9 @@
     </div>
     <div id="charts">
         <h5>Degree probabily distribution</h5>
-        <svg id="degreechart" width="220" height="140"></svg>
+        <svg id="degreechart" width="220" height="130"></svg>
+        <h5>Clustering Coeff probabily distribution</h5>
+        <svg id="clusteringcoefficientchart" width="220" height="130"></svg>
     </div>
 </div>
 <script src="d3.v4.min.js"></script>
@@ -126,7 +130,7 @@
     };
     const nodeSize = 9;
 
-    let graph, rawData, rawDataTmp, stats, timer, iteration, status, totalMaxDegree;
+    let graph, rawData, rawDataTmp, stats, timer, iteration, status, totalMaxDegree, options;
 
     var simulation = d3.forceSimulation()
         .force("link", d3.forceLink().id(function (d) { return d.id; }))
@@ -152,6 +156,7 @@
         const degrees = graph.nodes.map(n => n.degree);
         totalMaxDegree = d3.max(degrees);
         stopTimer();
+        options = getOptions();
         status = LOADING;
         simulation.restart();
         draw();
@@ -249,79 +254,82 @@
             .selectAll('div')
             .text(d => d.label + ': ' + d.val);
 
+        drawPdfChart('degree', totalMaxDegree, '#degreechart');
+        drawPdfChart('clusteringCoefficient', 1, '#clusteringcoefficientchart', 100);
 
+        function drawPdfChart(field, maxVal, selector, multiplier=1) {
+            //performance-wise it makes sense
+            if (status == CONTAGION || (options.speed == 500 && iteration%5))
+                return;
+            var chart = d3.select(selector),
+                chartWidth = +chart.attr("width"),
+                chartHeight = +chart.attr("height"),
+                margin = { top: 10, right: 30, bottom: 30, left: 40 };
 
-        var degreeChart = d3.select("#degreechart"),
-            degreeChartWidth = +degreeChart.attr("width"),
-            degreeChartHeight = +degreeChart.attr("height"),
-            margin = { top: 20, right: 30, bottom: 30, left: 40 };
+            const values = graph.nodes.map(n => n[field]*multiplier);
 
-        const degrees = graph.nodes.map(n => n.degree);
+            var x = d3.scaleLinear()
+                .domain([0, maxVal*multiplier])
+                .range([margin.left, chartWidth - margin.right]);
 
-        var x = d3.scaleLinear()
-            .domain([0, totalMaxDegree])
-            .range([margin.left, degreeChartWidth - margin.right]);
+            var y = d3.scaleLinear()
+                .domain([0, 0.1])
+                .range([chartHeight - margin.bottom, margin.top]);
 
-        var y = d3.scaleLinear()
-            .domain([0, 0.1])
-            .range([degreeChartHeight - margin.bottom, margin.top]);
+            let xAxis, yAxis;
+            let xAxisUpdate = d3.axisBottom(x).ticks(8);
+            let yAxisUpdate = d3.axisLeft(y).ticks(null, "%");
 
-        let xAxis, yAxis;
-        let xAxisUpdate = d3.axisBottom(x).ticks(8);
-        let yAxisUpdate = d3.axisLeft(y);
+            if (chart.selectAll('.axis').empty()) {
+                xAxis = chart.append("g")
+                    .attr("class", "axis axis--x")
+                    .attr("transform", "translate(0," + (chartHeight - margin.bottom) + ")");
 
-        if (d3.selectAll('.axis').empty()) {
-            xAxis = degreeChart.append("g")
-                .attr("class", "axis axis--x")
-                .attr("transform", "translate(0," + (degreeChartHeight - margin.bottom) + ")")
-                .call(xAxisUpdate);
+                yAxis = chart.append("g")
+                    .attr("class", "axis axis--y")
+                    .attr("transform", "translate(" + margin.left + ",0)");
+            } else {
+                xAxis = chart.selectAll('.axis--x');
+                yAxis = chart.selectAll('.axis--y');
+            }
+            xAxis.call(xAxisUpdate)
+            yAxis.call(yAxisUpdate);
 
-            yAxis = degreeChart.append("g")
-                .attr("class", "axis axis--y")
-                .attr("transform", "translate(" + margin.left + ",0)")
-                .call(yAxisUpdate.ticks(null, "%"));
-        } else {
-            xAxis = degreeChart.selectAll('.axis--x');
-            yAxis = degreeChart.selectAll('.axis--y');
-        }
-        xAxis.call(xAxisUpdate)
-        yAxis.call(yAxisUpdate);
+            var n = values.length,
+                bins = d3.histogram().domain(x.domain())(values),
+                density = kernelDensityEstimator(kernelEpanechnikov(7), x.ticks(20))(values);
 
-        var n = degrees.length,
-            bins = d3.histogram().domain(x.domain())(degrees),
-            density = kernelDensityEstimator(kernelEpanechnikov(7), x.ticks(20))(degrees);
+            const valueline = d3.line()
+                .curve(d3.curveBasis)
+                .x(function (d) { return x(d[0]); })
+                .y(function (d) { return y(d[1]); });
 
-        const valueline = d3.line()
-            .curve(d3.curveBasis)
-            .x(function (d) { return x(d[0]); })
-            .y(function (d) { return y(d[1]); });
+            const lines = chart
+                .selectAll("path.lines")
+                .data([density]);
 
-        const degreeLines = degreeChart
-            .selectAll("path.lines")
-            .data([density]);
+            lines.enter().append('path')
+                .attr('class', 'lines');
 
-        degreeLines.enter().append('path')
-            .attr('class', 'lines');
+            lines
+                .attr("fill", "none")
+                .attr("stroke", "#000")
+                .attr("stroke-width", 1.5)
+                .attr("stroke-linejoin", "round")
+                .attr("d", valueline);
 
-        degreeLines
-            .attr("fill", "none")
-            .attr("stroke", "#000")
-            .attr("stroke-width", 1.5)
-            .attr("stroke-linejoin", "round")
-            .attr("d", valueline);
+            function kernelDensityEstimator(kernel, X) {
+                return function (V) {
+                    return X.map(x => [x, d3.mean(V, v => kernel(x - v))]);
+                };
+            }
 
-        function kernelDensityEstimator(kernel, X) {
-            return function (V) {
-                return X.map(function (x) {
-                    return [x, d3.mean(V, function (v) { return kernel(x - v); })];
-                });
-            };
-        }
-
-        function kernelEpanechnikov(k) {
-            return function (v) {
-                return Math.abs(v /= k) <= 1 ? 0.75 * (1 - v * v) / k : 0;
-            };
+            function kernelEpanechnikov(k) {
+                return function (v) {
+                    v = v/k;
+                    return Math.abs(v) <= 1 ? 0.75 * (1 - v * v) / k : 0;
+                };
+            }
         }
 
     }
@@ -456,7 +464,7 @@
         cleanAttack();
         status = ATTACK;
         draw();
-        const options = getOptions();
+        options = getOptions();
         let nodeToBeRemoved;
         timer = d3.interval(function () {
             iteration++;
@@ -533,7 +541,7 @@
         cleanAttack();
         status = CONTAGION;
         draw();
-        const options = getOptions();
+        options = getOptions();
         const payoffs = { [NORMAL]: options.payoff1, [INFECTED]: options.payoff2 };
         let infectedNodes = chooseNodes(options.attackParameter, options.k);
         infectedNodes.forEach(n => n.group = INFECTED);
