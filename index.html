@@ -200,7 +200,7 @@
             .attr("height", nodeSize)
             .attr("rx", d => d.group == 3 ? 0 : 100)
             .attr("ry", d => d.group == 3 ? 0 : 100)
-            .attr('transform', `translate(-${nodeSize/2}, -${nodeSize/2})`)
+            .attr('transform', `translate(-${nodeSize / 2}, -${nodeSize / 2})`)
             .attr("fill", d => color(d.group));
 
         link = link
@@ -373,6 +373,35 @@
         }, +options.speed, d3.now());
     }
 
+    function getGiantComponentSize() {
+        const graph2 = getGraph(rawDataTmp);
+        const componentSizes = [];
+        do {
+            let i = 0;
+            const n = graph2.nodes.find(n => !n.visited);
+            if (!n)
+                break;
+            let nodesToBeVisited = [n];
+            while (nodesToBeVisited.length) {
+                let el = null;
+                do {
+                    el = nodesToBeVisited.pop();
+                } while (el.visited && nodesToBeVisited.length);
+                if (!el)
+                    break;
+                el.visited = true;
+                const neighbors = rawDataTmp[el.id];
+                i++;
+                const neighborsToVisit = neighbors.map(e => graph2.nodes.find(n => n.id == e)).filter(e => !e.visited);
+                nodesToBeVisited.push(...neighborsToVisit);
+            }
+            componentSizes.push(i);
+        } while (true);
+        const giantComponentSize = d3.max(componentSizes);
+        return giantComponentSize;
+
+    }
+
     function getStats() {
         function sum(xs) {
             return xs.reduce(function (a, b) { return a + b; });
@@ -384,24 +413,7 @@
             return d3.format(".2n")(v);
         }
         const nodes = graph.nodes.length;
-        const graph2 = getGraph(rawDataTmp);
-        const maxVal = d3.max(graph2.nodes.map(n => n.degree));
-        const n = graph2.nodes.find(n => n.degree == maxVal);
-        let i = 0;
-        const nodesToBeVisited = [n];
-        while (nodesToBeVisited.length) {
-            let el = null;
-            do {
-                el = nodesToBeVisited.pop();
-            } while (el.visited && nodesToBeVisited.length);
-            if (!el)
-                break;
-            el.visited = true;
-            const neighbors = rawDataTmp[el.id];
-            i++;
-            const neighborsToVisit = neighbors.map(e => graph2.nodes.find(n => n.id == e)).filter(e => !e.visited);
-            nodesToBeVisited.push(...neighborsToVisit);
-        }
+        const giantComponentSize = getGiantComponentSize();
         const averageDegree = avg(graph.nodes.map(n => n.degree));
         const averageClusteringCoefficient = avg(graph.nodes.map(n => n.clusteringCoefficient));
         const nonInfectedNodes = graph.nodes.filter(n => n.group !== INFECTED);
@@ -409,7 +421,7 @@
         return [
             { label: 'Iteration', val: iteration },
             { label: 'Number of nodes', val: nodes },
-            { label: 'Giant component size', val: i },
+            { label: 'Giant component size', val: giantComponentSize },
             { label: 'Avg degree', val: format(averageDegree) },
             { label: 'Avg clustering coefficient', val: format(averageClusteringCoefficient) },
             { label: 'Non infected nodes', val: nonInfectedNodes.length },
