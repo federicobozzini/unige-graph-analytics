@@ -149,7 +149,7 @@
         iteration = 0;
         const degrees = graph.nodes.map(n => n.degree);
         totalMaxDegree = d3.max(degrees);
-        stop();
+        stopTimer();
         status = LOADING;
         simulation.restart();
         draw();
@@ -448,9 +448,10 @@
     }
 
     function startAttack() {
-        stop();
+        stopTimer();
         cleanAttack();
         status = ATTACK;
+        draw();
         const options = getOptions();
         let nodeToBeRemoved;
         timer = d3.interval(function () {
@@ -524,10 +525,11 @@
     }
 
     function startContagion() {
-        stop();
+        stopTimer();
         cleanContagion();
         cleanAttack();
         status = CONTAGION;
+        draw();
         const options = getOptions();
         const payoffs = { [NORMAL]: options.payoff1, [INFECTED]: options.payoff2 };
         let infectedNodes = chooseNodes(options.attackParameter, options.k);
@@ -539,10 +541,14 @@
         }, +options.speed, d3.now());
     }
 
-    function stop() {
+    function stopTimer() {
         if (timer)
             timer.stop();
         status = WAITING;
+    }
+
+    function stop() {
+        stopTimer();
         draw();
     }
 
