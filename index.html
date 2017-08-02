@@ -124,8 +124,8 @@
         .velocityDecay(0.5)
         .on("tick", ticked);
 
-    let link = svg.append("g").classed('links', true).attr("stroke-width", 1).selectAll(".link");
-    let node = svg.append("g").classed('nodes', true).attr("stroke-width", 1.5).selectAll(".node");
+    let link = svg.append("g").classed('links', true).attr("stroke-width", 0.5).selectAll(".link");
+    let node = svg.append("g").classed('nodes', true).attr("stroke-width", 1).selectAll(".node");
 
     loadEvents();
     d3.json("adjacency_matrix.json", function (error, data) {
@@ -207,7 +207,11 @@
             .data(graph.links, function (d) { return d.source.id + "-" + d.target.id; });
         link.exit().remove();
         link = link.enter().append("line").merge(link);
-        link.attr("stroke", function (d) { return linkColor(d.group); });
+        link
+            .transition()
+            .duration(500)
+            .attr("stroke", d => linkColor(d.group))
+            .attr("stroke-width", d => d.group == 2 ? 1 : 0.5);
 
         node.append("title")
             .text(function (d) { return d.id; });
