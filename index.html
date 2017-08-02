@@ -42,6 +42,9 @@
         margin-right: 8px;
         width: 120px;
     }
+    .controls button:enabled {
+        cursor: pointer;
+    }
 
     #stats {
         min-height: 150px;
@@ -70,7 +73,7 @@
             <h4>Contagion initialization</h4>
             <label><span>Infected nodes:</span><input type="text" name="k" value="66" checked></label>
             <label><span>Option 1 payoff:</span><input type="text" name="payoff1" value="1" checked></label>
-            <label><span>Option 2 payoff:</span><input type="text" name="payoff2" value="2.9" checked></label>
+            <label><span>Option 2 payoff:</span><input type="text" name="payoff2" value="3" checked></label>
             <h4>Other options</h4>
             <label>
                 <span>Simulaton speed:</span>
@@ -130,7 +133,7 @@
     };
     const nodeSize = 9;
 
-    let graph, rawData, rawDataTmp, stats, timer, iteration, status, totalMaxDegree, options;
+    let graph, rawData, rawDataTmp, stats, timer, iteration, status, totalMaxDegree, options, cachedGiantComponentSize;
 
     var simulation = d3.forceSimulation()
         .force("link", d3.forceLink().id(function (d) { return d.id; }))
@@ -403,34 +406,23 @@
     }
 
     function getOptions() {
-        function groupBy(xs, key) {
-            return xs.reduce(function (rv, x) {
-                (rv[x[key]] = rv[x[key]] || []).push(x);
-                return rv;
-            }, {});
-        };
-
         const textInputs = [...document.querySelectorAll('input[type=text]')];
         const radioButtons = [...document.querySelectorAll('input[type=radio]')];
-        const radioGroups = groupBy(radioButtons, 'name');
         const checkboxes = [...document.querySelectorAll('input[type=checkbox]')];
         const selectOptions = [...document.querySelectorAll('option')];
-        selectOptions.forEach(o => parentName = o.parentNode.name);
-        const selectOptionGroups = groupBy(selectOptions, 'parentName');
         const options = {};
-        Object.keys(radioGroups).forEach(g => {
-            const selectedButton = radioGroups[g].find(b => b.checked);
-            options[selectedButton.name] = selectedButton.value;
-        });
         checkboxes.forEach(c => {
             options[c.name] = c.checked;
         });
         textInputs.forEach(t => {
             options[t.name] = t.value;
         });
+        radioButtons.filter(b => b.checked).forEach(b => {
+            options[b.name] = b.value;
+        });
         selectOptions.filter(o => o.selected).forEach(o => {
             options[o.parentNode.name] = o.value;
-        })
+        });
         return options;
     }
 
@@ -477,6 +469,8 @@
     }
 
     function getGiantComponentSize() {
+        if (cachedGiantComponentSize && status == CONTAGION)
+            return cachedGiantComponentSize;
         const graph2 = getGraph(rawDataTmp);
         const componentSizes = [];
         do {
@@ -501,32 +495,26 @@
             componentSizes.push(i);
         } while (true);
         const giantComponentSize = d3.max(componentSizes);
+        cachedGiantComponentSize = giantComponentSize;
         return giantComponentSize;
 
     }
 
     function getStats() {
-        function sum(xs) {
-            return xs.reduce(function (a, b) { return a + b; });
-        }
-        function avg(xs) {
-            return sum(xs) / xs.length;
-        };
         function format(v) {
             return d3.format(".2n")(v);
         }
         const nodes = graph.nodes.length;
         const giantComponentSize = getGiantComponentSize();
-        const averageDegree = avg(graph.nodes.map(n => n.degree));
-        const averageClusteringCoefficient = avg(graph.nodes.map(n => n.clusteringCoefficient));
-        const nonInfectedNodes = graph.nodes.filter(n => n.group !== INFECTED);
+        const averageDegree = d3.mean(graph.nodes, n => n.degree);
+        const averageClusteringCoefficient = d3.mean(graph.nodes, n => n.clusteringCoefficient);
         const infectedNodes = graph.nodes.filter(n => n.group === INFECTED);
         return [
             { label: 'Number of nodes', val: nodes },
             { label: 'Giant component size', val: giantComponentSize },
             { label: 'Avg degree', val: format(averageDegree) },
             { label: 'Avg clustering coefficient', val: format(averageClusteringCoefficient) },
-            { label: 'Non infected nodes', val: nonInfectedNodes.length },
+            { label: 'Non infected nodes', val: nodes-infectedNodes.length },
             { label: 'Infected nodes', val: infectedNodes.length }
         ];
     }
@@ -575,7 +563,6 @@
         });
         graph.nodes.forEach(n => {
             n.group = n.infected ? INFECTED : NORMAL;
-            n.infect = false;
         });
     }
 
