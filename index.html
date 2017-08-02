@@ -20,12 +20,13 @@
         vertical-align: top;
     }
 
-    .controls>div {
+    .controls > div {
         margin-bottom: 20px;
     }
 
     .controls label {
         display: block;
+        margin-bottom: 4px;
     }
 
     .controls button {
@@ -52,10 +53,6 @@
     <h2>Control Panel</h2>
     <div class="controls">
         <div>
-            <h4>Node selection strategy</h4>
-            <label><input type="radio" name="attackParameter" value="degree" checked>Degree</label>
-            <label><input type="radio" name="attackParameter" value="clusteringCoefficient">Clustering Coefficient</label>
-            <label><input type="radio" name="attackParameter" value="random">Random</label>
             <h4>Contagion initialization</h4>
             <label><span>Infected nodes:</span><input type="text" name="k" value="66" checked></label>
             <label><span>Option 1 payoff:</span><input type="text" name="payoff1" value="1" checked></label>
@@ -67,6 +64,14 @@
                     <option value="2000">Slow</option>
                     <option value="1000" selected>Medium</option>
                     <option value="500">Fast</option>
+                </select>
+            </label>
+            <label>
+                <span>Node selection:</span>
+                <select name="attackParameter">
+                    <option value="degree"selected>Degree</option>
+                    <option value="clusteringCoefficient">Clustering coefficient</option>
+                    <option value="random">Random</option>
                 </select>
             </label>
         </div>
@@ -115,7 +120,7 @@
     d3.timeout(() => simulation.stop(), 4000);
     let link = svg.append("g").classed('links', true).attr("stroke-width", 1).selectAll(".link");
     let node = svg.append("g").classed('nodes', true).attr("stroke-width", 1.5).selectAll(".node");
-    
+
     loadEvents();
     d3.json("adjacency_matrix.json", function (error, data) {
         if (error) throw error;
@@ -333,9 +338,9 @@
 
     function getStats() {
         function sum(xs) {
-            return xs.reduce(function(a, b) { return a + b; });
-        } 
-        function avg(xs) { 
+            return xs.reduce(function (a, b) { return a + b; });
+        }
+        function avg(xs) {
             return sum(xs) / xs.length;
         };
         function format(v) {
@@ -365,11 +370,11 @@
         const nonInfectedNodes = graph.nodes.filter(n => n.group !== INFECTED);
         const infectedNodes = graph.nodes.filter(n => n.group === INFECTED);
         return [
-            { label: 'Iteration', val: iteration},
+            { label: 'Iteration', val: iteration },
             { label: 'Number of nodes', val: nodes },
             { label: 'Giant component size', val: i },
-            {label: 'Avg degree', val: format(averageDegree)},
-            {label: 'Avg clustering coefficient', val: format(averageClusteringCoefficient)},
+            { label: 'Avg degree', val: format(averageDegree) },
+            { label: 'Avg clustering coefficient', val: format(averageClusteringCoefficient) },
             { label: 'Non infected nodes', val: nonInfectedNodes.length },
             { label: 'Infected nodes', val: infectedNodes.length }
         ];
