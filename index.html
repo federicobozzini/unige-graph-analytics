@@ -26,7 +26,7 @@
     }
 
     .controls>div {
-        margin-bottom: 10px;
+        margin-bottom: 8px;
     }
 
     .controls label {
@@ -36,13 +36,13 @@
 
     .controls button {
         display: inline-block;
-        margin-bottom: 10px;
+        margin-bottom: 8px;
         margin-right: 8px;
         width: 120px;
     }
 
     #stats {
-        min-height: 180px;
+        min-height: 150px;
     }
 
     input[type=text] {
@@ -58,7 +58,9 @@
         font-weight: bold;
     }
 </style>
-<svg width="1260" height="750"></svg>
+<svg width="1260" height="750">
+    <text class="iter" x="20" y="20" font-size="20px" fill="blue">Iteration: 0</text>
+</svg>
 <div id="info">
     <h2>Control Panel</h2>
     <div class="controls">
@@ -186,6 +188,8 @@
         controlsToDisable.forEach(c => c.disabled = true);
 
         d3.select('.status').text(d => 'Status: ' + status);
+
+        d3.select('.iter').text(d => 'Iteration: ' + iteration)
 
         node = svg.select('.nodes')
             .selectAll("rect")
@@ -510,7 +514,6 @@
         const nonInfectedNodes = graph.nodes.filter(n => n.group !== INFECTED);
         const infectedNodes = graph.nodes.filter(n => n.group === INFECTED);
         return [
-            { label: 'Iteration', val: iteration },
             { label: 'Number of nodes', val: nodes },
             { label: 'Giant component size', val: giantComponentSize },
             { label: 'Avg degree', val: format(averageDegree) },
@@ -542,6 +545,7 @@
     }
 
     function stopTimer() {
+        iteration = 0;
         if (timer)
             timer.stop();
         status = WAITING;
