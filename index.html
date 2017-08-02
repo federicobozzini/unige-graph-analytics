@@ -24,7 +24,7 @@
     #info {
         display: inline-block;
         vertical-align: top;
-        max-width: 280px;
+        max-width: 400px;
     }
 
     .controls>div {
@@ -40,8 +40,9 @@
         display: inline-block;
         margin-bottom: 8px;
         margin-right: 8px;
-        width: 120px;
+        width: 140px;
     }
+
     .controls button:enabled {
         cursor: pointer;
     }
@@ -62,8 +63,12 @@
     .status {
         font-weight: bold;
     }
+
+    #charts>div {
+        display: inline-block;
+    }
 </style>
-<svg width="1260" height="750">
+<svg width="1150" height="750">
     <text class="iter" x="20" y="20" font-size="20px" fill="blue">Iteration: 0</text>
 </svg>
 <div id="info">
@@ -80,15 +85,15 @@
                 <select name="speed">
                     <option value="2000">Slow</option>
                     <option value="1000" selected>Medium</option>
-                    <option value="500">Fast</option>
+                    <option value="750">Fast</option>
                 </select>
             </label>
             <label>
                 <span>Node selection:</span>
                 <select name="attackParameter">
-                    <option value="degree"selected>Degree</option>
+                    <option value="degree">Degree</option>
                     <option value="clusteringCoefficient">Clustering coefficient</option>
-                    <option value="random">Random</option>
+                    <option value="random" selected>Random</option>
                 </select>
             </label>
         </div>
@@ -104,16 +109,29 @@
         <h3>Stats</h3>
     </div>
     <div id="charts">
-        <h5>Degree probabily distribution</h5>
-        <svg id="degreechart" width="220" height="130"></svg>
-        <h5>Clustering Coeff probabily distribution</h5>
-        <svg id="clusteringcoefficientchart" width="220" height="130"></svg>
+        <div>
+            <h5>Degree distribution</h5>
+            <svg id="degreechart" width="190" height="130"></svg>
+        </div>
+        <div>
+            <h5>Clustering Coeff distribution</h5>
+            <svg id="clusteringcoefficientchart" width="190" height="130"></svg>
+        </div>
+        <div>
+            <h5>Average degree</h5>
+            <svg id="averagedegreeschart" width="190" height="130"></svg>
+        </div>
+        <div>
+            <h5>Giant Component size</h5>
+            <svg id="giantcomponentchart" width="190" height="130"></svg>
+        </div>
     </div>
 </div>
 <script src="d3.v4.min.js"></script>
 <script>
     const NORMAL = 1, TO_BE_REMOVED = 2, INFECTED = 3;
     const LOADING = 'Loading', WAITING = 'Wating', ATTACK = 'Attack', CONTAGION = 'Contagion';
+    const PERCENTAGE = 0;
     var svg = d3.select("svg"),
         width = +svg.attr("width"),
         height = +svg.attr("height");
@@ -125,24 +143,27 @@
             case INFECTED: return '#ee7600';
         }
     };
+
     var linkColor = v => {
         switch (v) {
             case NORMAL: return '#aaa';
             case TO_BE_REMOVED: return 'red';
         }
     };
-    const nodeSize = 9;
+    const nodeSize = 9, transitionDuration = 500;
 
-    let graph, rawData, rawDataTmp, stats, timer, iteration, status, totalMaxDegree, options, cachedGiantComponentSize;
+    let graph, rawData, rawDataTmp, stats, timer,
+        iteration, status, totalMaxDegree, options,
+        cachedGiantComponentSize, giantComponentSizes = [], averageDegrees;
 
     var simulation = d3.forceSimulation()
         .force("link", d3.forceLink().id(function (d) { return d.id; }))
         .force("charge", d3.forceManyBody())
-        .force("center", d3.forceCenter(width / 2 - 140, height / 2))
+        .force("center", d3.forceCenter(width / 2 - 120, height / 2))
         .velocityDecay(0.5)
         .on("tick", ticked);
 
-    let link = svg.append("g").classed('links', true).attr("stroke-width", 0.5).selectAll(".link");
+    let link = svg.append("g").classed('links', true).attr("stroke-width", 0.3).selectAll(".link");
     let node = svg.append("g").classed('nodes', true).attr("stroke-width", 1).selectAll(".node");
 
     loadEvents();
@@ -156,8 +177,7 @@
         rawDataTmp = JSON.parse(JSON.stringify(rawData));
         graph = getGraph(rawData);
         iteration = 0;
-        const degrees = graph.nodes.map(n => n.degree);
-        totalMaxDegree = d3.max(degrees);
+        totalMaxDegree = d3.max(graph.nodes, n => n.degree);
         stopTimer();
         options = getOptions();
         status = LOADING;
@@ -218,9 +238,9 @@
                 draw();
             })
             .transition()
-            .duration(500)
-            .attr("width", nodeSize)
-            .attr("height", nodeSize)
+            .duration(transitionDuration)
+            .attr("width", d => d.group == 3 ? nodeSize - 1 : nodeSize)
+            .attr("height", d => d.group == 3 ? nodeSize - 1 : nodeSize)
             .attr("rx", d => d.group == 3 ? 0 : 100)
             .attr("ry", d => d.group == 3 ? 0 : 100)
             .attr('transform', `translate(-${nodeSize / 2}, -${nodeSize / 2})`)
@@ -232,7 +252,7 @@
         link = link.enter().append("line").merge(link);
         link
             .transition()
-            .duration(500)
+            .duration(transitionDuration)
             .attr("stroke", d => linkColor(d.group))
             .attr("stroke-width", d => d.group == 2 ? 1 : 0.5);
 
@@ -257,31 +277,66 @@
             .selectAll('div')
             .text(d => d.label + ': ' + d.val);
 
-        drawPdfChart('degree', totalMaxDegree, '#degreechart');
-        drawPdfChart('clusteringCoefficient', 1, '#clusteringcoefficientchart', 100);
+        drawPdfChart(graph.nodes.map(n => n.degree), totalMaxDegree, '#degreechart');
+        drawPdfChart(graph.nodes.map(n => n.clusteringCoefficient * 100), 100, '#clusteringcoefficientchart');
+        if (giantComponentSizes.length)
+            drawLineChart([giantComponentSizes.map((s, i) => [i, s])], giantComponentSizes.length + 10, giantComponentSizes[0] * 1.1, '#giantcomponentchart');
 
-        function drawPdfChart(field, maxVal, selector, multiplier=1) {
+        if (averageDegrees.length)
+            drawLineChart([averageDegrees.map((s, i) => [i, s])], averageDegrees.length + 10, averageDegrees[0] * 1.3, '#averagedegreeschart')
+
+        function drawPdfChart(values, xMaxVal, selector) {
             //performance-wise it makes sense
-            if (status == CONTAGION || (options.speed == 500 && iteration%5))
+            if (status == CONTAGION || (options.speed == 750 && iteration % 5))
                 return;
+
+            var x = d3.scaleLinear()
+                .domain([0, xMaxVal]);
+
+            var n = values.length,
+                bins = d3.histogram().domain(x.domain())(values),
+                density = kernelDensityEstimator(kernelEpanechnikov(7), x.ticks(20))(values);
+
+            drawLineChart([density], xMaxVal, .1, selector, x, { yAxis: PERCENTAGE });
+
+            function kernelDensityEstimator(kernel, X) {
+                return function (V) {
+                    return X.map(x => [x, d3.mean(V, v => kernel(x - v))]);
+                };
+            }
+
+            function kernelEpanechnikov(k) {
+                return function (v) {
+                    v = v / k;
+                    return Math.abs(v) <= 1 ? 0.75 * (1 - v * v) / k : 0;
+                };
+            }
+        }
+
+        function drawLineChart(data, xMaxVal, yMaxVal, selector, xScale, options = {}) {
             var chart = d3.select(selector),
                 chartWidth = +chart.attr("width"),
                 chartHeight = +chart.attr("height"),
                 margin = { top: 10, right: 30, bottom: 30, left: 40 };
 
-            const values = graph.nodes.map(n => n[field]*multiplier);
-
-            var x = d3.scaleLinear()
-                .domain([0, maxVal*multiplier])
-                .range([margin.left, chartWidth - margin.right]);
+            let x;
+            if (xScale)
+                x = xScale
+                    .range([margin.left, chartWidth - margin.right]);
+            else
+                x = d3.scaleLinear()
+                    .domain([0, xMaxVal])
+                    .range([margin.left, chartWidth - margin.right]);
 
             var y = d3.scaleLinear()
-                .domain([0, 0.1])
+                .domain([0, yMaxVal])
                 .range([chartHeight - margin.bottom, margin.top]);
 
             let xAxis, yAxis;
-            let xAxisUpdate = d3.axisBottom(x).ticks(8);
-            let yAxisUpdate = d3.axisLeft(y).ticks(null, "%");
+            let xAxisUpdate = d3.axisBottom(x).ticks(5);
+            let yAxisUpdate = d3.axisLeft(y);
+            if (options.yAxis == PERCENTAGE)
+                yAxisUpdate.ticks(6, "%");
 
             if (chart.selectAll('.axis').empty()) {
                 xAxis = chart.append("g")
@@ -295,12 +350,14 @@
                 xAxis = chart.selectAll('.axis--x');
                 yAxis = chart.selectAll('.axis--y');
             }
-            xAxis.call(xAxisUpdate)
-            yAxis.call(yAxisUpdate);
-
-            var n = values.length,
-                bins = d3.histogram().domain(x.domain())(values),
-                density = kernelDensityEstimator(kernelEpanechnikov(7), x.ticks(20))(values);
+            xAxis
+                .transition()
+                .duration(transitionDuration)
+                .call(xAxisUpdate)
+            yAxis
+                .transition()
+                .duration(transitionDuration)
+                .call(yAxisUpdate);
 
             const valueline = d3.line()
                 .curve(d3.curveBasis)
@@ -309,30 +366,19 @@
 
             const lines = chart
                 .selectAll("path.lines")
-                .data([density]);
+                .data(data);
 
             lines.enter().append('path')
                 .attr('class', 'lines');
 
             lines
+                .transition()
+                .duration(transitionDuration)
                 .attr("fill", "none")
                 .attr("stroke", "#000")
                 .attr("stroke-width", 1.5)
                 .attr("stroke-linejoin", "round")
                 .attr("d", valueline);
-
-            function kernelDensityEstimator(kernel, X) {
-                return function (V) {
-                    return X.map(x => [x, d3.mean(V, v => kernel(x - v))]);
-                };
-            }
-
-            function kernelEpanechnikov(k) {
-                return function (v) {
-                    v = v/k;
-                    return Math.abs(v) <= 1 ? 0.75 * (1 - v * v) / k : 0;
-                };
-            }
         }
 
     }
@@ -365,7 +411,7 @@
         const n = neighbors.length;
         if (n <= 1)
             return 0;
-        const connectedNeighbors = neighbors.filter(n => data[n].some(n2 => neighbors.includes(n2))).length;
+        const connectedNeighbors = d3.sum(neighbors, n => data[n].filter(n2 => neighbors.includes(n2)).length);
         return connectedNeighbors / n / (n - 1);
     }
 
@@ -464,6 +510,8 @@
                 removeVertex(nodeToBeRemoved);
             nodeToBeRemoved = chooseNodes(options.attackParameter, 1)[0];
             setNodeToDelete(nodeToBeRemoved);
+            giantComponentSizes.push(cachedGiantComponentSize);
+            averageDegrees.push(stats[2]['val']);
             draw();
         }, +options.speed, d3.now());
     }
@@ -497,7 +545,6 @@
         const giantComponentSize = d3.max(componentSizes);
         cachedGiantComponentSize = giantComponentSize;
         return giantComponentSize;
-
     }
 
     function getStats() {
@@ -514,7 +561,7 @@
             { label: 'Giant component size', val: giantComponentSize },
             { label: 'Avg degree', val: format(averageDegree) },
             { label: 'Avg clustering coefficient', val: format(averageClusteringCoefficient) },
-            { label: 'Non infected nodes', val: nodes-infectedNodes.length },
+            { label: 'Non infected nodes', val: nodes - infectedNodes.length },
             { label: 'Infected nodes', val: infectedNodes.length }
         ];
     }
@@ -541,6 +588,8 @@
     }
 
     function stopTimer() {
+        giantComponentSizes = [];
+        averageDegrees = [];
         iteration = 0;
         if (timer)
             timer.stop();
