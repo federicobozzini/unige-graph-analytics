@@ -154,7 +154,7 @@
 
     let graph, rawData, rawDataTmp, stats, timer,
         iteration, status, totalMaxDegree, options,
-        cachedGiantComponentSize, giantComponentSizes = [], averageDegrees;
+        cachedGiantComponentSize, giantComponentSizes, averageDegrees;
 
     var simulation = d3.forceSimulation()
         .force("link", d3.forceLink().id(function (d) { return d.id; }))
@@ -176,6 +176,8 @@
     function reset() {
         rawDataTmp = JSON.parse(JSON.stringify(rawData));
         graph = getGraph(rawData);
+        giantComponentSizes = [];
+        averageDegrees = []
         iteration = 0;
         totalMaxDegree = d3.max(graph.nodes, n => n.degree);
         stopTimer();
@@ -279,11 +281,9 @@
 
         drawPdfChart(graph.nodes.map(n => n.degree), totalMaxDegree, '#degreechart');
         drawPdfChart(graph.nodes.map(n => n.clusteringCoefficient * 100), 100, '#clusteringcoefficientchart');
-        if (giantComponentSizes.length)
-            drawLineChart([giantComponentSizes.map((s, i) => [i, s])], giantComponentSizes.length + 10, giantComponentSizes[0] * 1.1, '#giantcomponentchart');
+        drawLineChart([giantComponentSizes.map((s, i) => [i, s])], giantComponentSizes.length + 10, giantComponentSizes[0] * 1.1 || graph.nodes.length, '#giantcomponentchart');
 
-        if (averageDegrees.length)
-            drawLineChart([averageDegrees.map((s, i) => [i, s])], averageDegrees.length + 10, averageDegrees[0] * 1.3, '#averagedegreeschart')
+        drawLineChart([averageDegrees.map((s, i) => [i, s])], averageDegrees.length + 10, averageDegrees[0] * 1.3 || 12, '#averagedegreeschart')
 
         function drawPdfChart(values, xMaxVal, selector) {
             //performance-wise it makes sense
@@ -337,6 +337,8 @@
             let yAxisUpdate = d3.axisLeft(y);
             if (options.yAxis == PERCENTAGE)
                 yAxisUpdate.ticks(6, "%");
+            else
+                yAxisUpdate.ticks(6);
 
             if (chart.selectAll('.axis').empty()) {
                 xAxis = chart.append("g")
@@ -498,6 +500,8 @@
     }
 
     function startAttack() {
+        giantComponentSizes = [];
+        averageDegrees = [];
         stopTimer();
         cleanAttack();
         status = ATTACK;
@@ -588,8 +592,6 @@
     }
 
     function stopTimer() {
-        giantComponentSizes = [];
-        averageDegrees = [];
         iteration = 0;
         if (timer)
             timer.stop();
