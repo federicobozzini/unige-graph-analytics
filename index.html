@@ -30,6 +30,11 @@
             max-width: 400px;
         }
 
+        #graph {
+            width: calc(100% - 405px);
+            display: inline-block;
+        }
+
         .controls>div {
             margin-bottom: 8px;
         }
@@ -74,9 +79,11 @@
 </head>
 
 <body>
-    <svg width="1150" height="750">
-        <text class="iter" x="20" y="20" font-size="20px" fill="blue">Iteration: 0</text>
-    </svg>
+    <div id="graph">
+        <svg width="1050" height="750">
+            <text class="iter" x="20" y="20" font-size="20px" fill="blue">Iteration: 0</text>
+        </svg>
+    </div>
     <div id="info">
         <h2>Control Panel</h2>
         <div class="controls">
